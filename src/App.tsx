@@ -11,6 +11,7 @@ import CulinaAI from "./pages/CulinaAI";
 import Recipes from "./pages/Recipes";
 import Profile from "./pages/Profile";
 import RecipeDetail from "./pages/RecipeDetail";
+import CookingMode from "./pages/CookingMode";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />
+          <Route path="/cooking/:id" element={<CookingMode />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
