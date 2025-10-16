@@ -82,8 +82,16 @@ const CulinaAI = () => {
           throw new Error(data.error);
         }
       } else if (data.recipeId) {
+        // Show success message
+        toast({
+          title: "Recette créée ! 🎉",
+          description: "Votre recette a été ajoutée à 'Mes Créations'",
+        });
+        
         // Navigate to the new recipe
-        navigate(`/recipe/${data.recipeId}`);
+        setTimeout(() => {
+          navigate(`/recipe/${data.recipeId}`);
+        }, 800);
       }
     } catch (error: any) {
       console.error("Error generating recipe:", error);
