@@ -206,6 +206,7 @@ export type Database = {
           generation_count: number
           id: string
           month: string
+          monthly_limit: number | null
           updated_at: string
           user_id: string
         }
@@ -214,6 +215,7 @@ export type Database = {
           generation_count?: number
           id?: string
           month: string
+          monthly_limit?: number | null
           updated_at?: string
           user_id: string
         }
@@ -222,6 +224,7 @@ export type Database = {
           generation_count?: number
           id?: string
           month?: string
+          monthly_limit?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -288,6 +291,7 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           id: string
+          max_saved_recipes: number | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           subscription_tier: string
@@ -298,6 +302,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           id?: string
+          max_saved_recipes?: number | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_tier?: string
@@ -308,6 +313,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           id?: string
+          max_saved_recipes?: number | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_tier?: string
@@ -321,7 +327,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_generate_recipe: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      can_save_recipe: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

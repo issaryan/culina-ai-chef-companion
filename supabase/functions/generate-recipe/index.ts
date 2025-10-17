@@ -26,38 +26,26 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Check subscription tier
-    const { data: subscription } = await supabase
-      .from("user_subscription")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
+    // Check if user can generate recipe using the database function
+    const { data: canGenerate, error: checkError } = await supabase
+      .rpc("can_generate_recipe", { p_user_id: userId });
 
-    const isFree = subscription?.subscription_tier === "free";
+    if (checkError) {
+      console.error("Error checking quota:", checkError);
+      throw new Error("Failed to check generation quota");
+    }
 
-    // Check AI usage quota for free users
-    if (isFree) {
-      const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-
-      const { data: usage } = await supabase
-        .from("user_ai_usage")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("month", currentMonth)
-        .single();
-
-      if (usage && usage.generation_count >= 5) {
-        return new Response(
-          JSON.stringify({
-            error:
-              "Quota de génération gratuit dépassé. Passez à Pro pour continuer.",
-          }),
-          {
-            status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
+    if (!canGenerate) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Quota de génération gratuit dépassé. Passez à Pro pour des générations illimitées.",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Get user preferences
@@ -216,31 +204,40 @@ Génère une recette complète et appétissante basée sur la demande de l'utili
       if (stepsError) console.error("Steps error:", stepsError);
     }
 
-    // Update AI usage for free users
-    if (isFree) {
-      const currentMonth = new Date().toISOString().slice(0, 7);
+    // Update AI usage counter
+    const currentMonth = new Date().toISOString().slice(0, 7);
 
-      const { data: existingUsage } = await supabase
+    const { data: existingUsage } = await supabase
+      .from("user_ai_usage")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("month", currentMonth)
+      .single();
+
+    if (existingUsage) {
+      await supabase
         .from("user_ai_usage")
-        .select("*")
+        .update({
+          generation_count: existingUsage.generation_count + 1,
+        })
+        .eq("id", existingUsage.id);
+    } else {
+      // Get user subscription tier to set appropriate limit
+      const { data: subscription } = await supabase
+        .from("user_subscription")
+        .select("subscription_tier")
         .eq("user_id", userId)
-        .eq("month", currentMonth)
         .single();
 
-      if (existingUsage) {
-        await supabase
-          .from("user_ai_usage")
-          .update({
-            generation_count: existingUsage.generation_count + 1,
-          })
-          .eq("id", existingUsage.id);
-      } else {
-        await supabase.from("user_ai_usage").insert({
-          user_id: userId,
-          month: currentMonth,
-          generation_count: 1,
-        });
-      }
+      const monthlyLimit =
+        subscription?.subscription_tier === "pro" ? 999999 : 5;
+
+      await supabase.from("user_ai_usage").insert({
+        user_id: userId,
+        month: currentMonth,
+        generation_count: 1,
+        monthly_limit: monthlyLimit,
+      });
     }
 
     return new Response(

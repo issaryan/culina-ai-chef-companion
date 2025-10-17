@@ -20,6 +20,7 @@ const Profile = () => {
   const { toast } = useToast();
   const [profile, setProfile] = useState<any>(null);
   const [subscription, setSubscription] = useState<any>(null);
+  const [quotaInfo, setQuotaInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,8 +49,29 @@ const Profile = () => {
         .eq("user_id", user.id)
         .single();
 
+      // Fetch AI usage quota
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const { data: usageData } = await supabase
+        .from("user_ai_usage")
+        .select("generation_count, monthly_limit")
+        .eq("user_id", user.id)
+        .eq("month", currentMonth)
+        .maybeSingle();
+
+      // Count recipes
+      const { count: recipeCount } = await supabase
+        .from("recipes")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
       setProfile(profileData);
       setSubscription(subData);
+      setQuotaInfo({
+        aiUsed: usageData?.generation_count || 0,
+        aiLimit: usageData?.monthly_limit || 5,
+        recipesCount: recipeCount || 0,
+        recipesLimit: subData?.max_saved_recipes || 10,
+      });
     } catch (error) {
       console.error("Error fetching profile:", error);
     } finally {
@@ -154,6 +176,62 @@ const Profile = () => {
               >
                 Débloquer toutes les fonctionnalités
               </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* Usage Stats */}
+        {quotaInfo && (
+          <Card className="p-6 space-y-4">
+            <h3 className="font-semibold text-lg">Utilisation</h3>
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-muted-foreground">
+                    Générations IA ce mois
+                  </span>
+                  <span className="font-medium">
+                    {quotaInfo.aiUsed}/{isPro ? "∞" : quotaInfo.aiLimit}
+                  </span>
+                </div>
+                {!isPro && (
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(
+                          (quotaInfo.aiUsed / quotaInfo.aiLimit) * 100,
+                          100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-muted-foreground">
+                    Recettes sauvegardées
+                  </span>
+                  <span className="font-medium">
+                    {quotaInfo.recipesCount}/
+                    {isPro ? "∞" : quotaInfo.recipesLimit}
+                  </span>
+                </div>
+                {!isPro && (
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-accent h-2 rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(
+                          (quotaInfo.recipesCount / quotaInfo.recipesLimit) * 100,
+                          100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
         )}

@@ -24,6 +24,11 @@ const CulinaAI = () => {
   ]);
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [quotaInfo, setQuotaInfo] = useState<{
+    remaining: number;
+    limit: number;
+    isPro: boolean;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -33,6 +38,46 @@ const CulinaAI = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    fetchQuotaInfo();
+  }, []);
+
+  const fetchQuotaInfo = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      const { data: subscription } = await supabase
+        .from("user_subscription")
+        .select("subscription_tier")
+        .eq("user_id", user.id)
+        .single();
+
+      const { data: usage } = await supabase
+        .from("user_ai_usage")
+        .select("generation_count, monthly_limit")
+        .eq("user_id", user.id)
+        .eq("month", currentMonth)
+        .maybeSingle();
+
+      const isPro = subscription?.subscription_tier === "pro";
+      const limit = isPro ? 999999 : 5;
+      const used = usage?.generation_count || 0;
+
+      setQuotaInfo({
+        remaining: limit - used,
+        limit: limit,
+        isPro: isPro,
+      });
+    } catch (error) {
+      console.error("Error fetching quota:", error);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isGenerating) return;
@@ -82,6 +127,9 @@ const CulinaAI = () => {
           throw new Error(data.error);
         }
       } else if (data.recipeId) {
+        // Refresh quota info
+        fetchQuotaInfo();
+        
         // Show success message
         toast({
           title: "Recette créée ! 🎉",
@@ -123,9 +171,18 @@ const CulinaAI = () => {
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="safe-top bg-card border-b border-border px-4 py-4 flex items-center gap-3">
-        <ChefHat className="h-6 w-6 text-primary" />
-        <h1 className="text-xl font-bold">Assistant Culina AI</h1>
+      <header className="safe-top bg-card border-b border-border px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ChefHat className="h-6 w-6 text-primary" />
+            <h1 className="text-xl font-bold">Assistant Culina AI</h1>
+          </div>
+          {quotaInfo && !quotaInfo.isPro && (
+            <div className="text-sm text-muted-foreground">
+              {quotaInfo.remaining}/{quotaInfo.limit}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Messages */}

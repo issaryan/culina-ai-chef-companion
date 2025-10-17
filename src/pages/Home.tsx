@@ -6,6 +6,13 @@ import { RecipeCard } from "@/components/RecipeCard";
 import { TabBar } from "@/components/TabBar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Recipe {
   id: string;
@@ -21,20 +28,39 @@ const Home = () => {
   const { toast } = useToast();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
+  const [cuisineFilter, setCuisineFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchRecipes();
-  }, []);
+  }, [searchQuery, difficultyFilter, cuisineFilter]);
 
   const fetchRecipes = async () => {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      let query = supabase
         .from("recipes")
         .select("*")
         .eq("is_public", true)
-        .order("created_at", { ascending: false })
-        .limit(20);
+        .order("created_at", { ascending: false });
+
+      // Apply search filter
+      if (searchQuery) {
+        query = query.ilike("title", `%${searchQuery}%`);
+      }
+
+      // Apply difficulty filter
+      if (difficultyFilter !== "all") {
+        query = query.eq("difficulty", difficultyFilter);
+      }
+
+      // Apply cuisine filter
+      if (cuisineFilter !== "all") {
+        query = query.eq("cuisine_type", cuisineFilter);
+      }
+
+      const { data, error } = await query.limit(20);
 
       if (error) throw error;
       setRecipes(data || []);
@@ -50,16 +76,14 @@ const Home = () => {
     }
   };
 
-  const filteredRecipes = recipes.filter((recipe) =>
-    recipe.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredRecipes = recipes;
 
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* Header */}
       <header className="safe-top bg-card border-b border-border sticky top-0 z-40">
-        <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold mb-4">Découvrir</h1>
+        <div className="px-4 py-4 space-y-4">
+          <h1 className="text-2xl font-bold">Découvrir</h1>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
@@ -69,6 +93,32 @@ const Home = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
+          </div>
+          <div className="flex gap-2">
+            <Select value={difficultyFilter} onValueChange={setDifficultyFilter}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Difficulté" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes</SelectItem>
+                <SelectItem value="easy">Facile</SelectItem>
+                <SelectItem value="medium">Moyen</SelectItem>
+                <SelectItem value="hard">Difficile</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={cuisineFilter} onValueChange={setCuisineFilter}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Cuisine" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes</SelectItem>
+                <SelectItem value="française">Française</SelectItem>
+                <SelectItem value="italienne">Italienne</SelectItem>
+                <SelectItem value="asiatique">Asiatique</SelectItem>
+                <SelectItem value="mexicaine">Mexicaine</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </header>
