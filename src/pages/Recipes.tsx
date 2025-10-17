@@ -6,7 +6,7 @@ import { TabBar } from "@/components/TabBar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Crown } from "lucide-react";
+import { Crown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Recipe {
@@ -18,6 +18,8 @@ interface Recipe {
   nutritional_info: any;
 }
 
+const RECIPES_PER_PAGE = 12;
+
 const Recipes = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -25,11 +27,18 @@ const Recipes = () => {
   const [myCreations, setMyCreations] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<any>(null);
+  const [favoritesPage, setFavoritesPage] = useState(1);
+  const [creationsPage, setCreationsPage] = useState(1);
+  const [totalFavorites, setTotalFavorites] = useState(0);
+  const [totalCreations, setTotalCreations] = useState(0);
+
+  useEffect(() => {
+    fetchSubscription();
+  }, []);
 
   useEffect(() => {
     fetchUserRecipes();
-    fetchSubscription();
-  }, []);
+  }, [favoritesPage, creationsPage]);
 
   const fetchSubscription = async () => {
     try {
@@ -60,28 +69,46 @@ const Recipes = () => {
         return;
       }
 
-      // Fetch favorites
-      const { data: favData, error: favError } = await supabase
-        .from("user_favorites")
-        .select("recipe_id, recipes(*)")
-        .eq("user_id", user.id);
+      const favFrom = (favoritesPage - 1) * RECIPES_PER_PAGE;
+      const favTo = favFrom + RECIPES_PER_PAGE - 1;
 
-      if (favError) throw favError;
+      const creationsFrom = (creationsPage - 1) * RECIPES_PER_PAGE;
+      const creationsTo = creationsFrom + RECIPES_PER_PAGE - 1;
 
-      const favRecipes = favData
+      const [favCount, favResult, creationsCount, creationsResult] = await Promise.all([
+        supabase
+          .from("user_favorites")
+          .select("*", { count: 'exact', head: true })
+          .eq("user_id", user.id),
+        supabase
+          .from("user_favorites")
+          .select("recipe_id, recipes(*)")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .range(favFrom, favTo),
+        supabase
+          .from("recipes")
+          .select("*", { count: 'exact', head: true })
+          .eq("user_id", user.id),
+        supabase
+          .from("recipes")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .range(creationsFrom, creationsTo)
+      ]);
+
+      if (favResult.error) throw favResult.error;
+      if (creationsResult.error) throw creationsResult.error;
+
+      const favRecipes = favResult.data
         ?.map((f: any) => f.recipes)
         .filter(Boolean) as Recipe[];
+
       setFavorites(favRecipes || []);
-
-      // Fetch user's created recipes
-      const { data: createdData, error: createdError } = await supabase
-        .from("recipes")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (createdError) throw createdError;
-      setMyCreations(createdData || []);
+      setMyCreations(creationsResult.data || []);
+      setTotalFavorites(favCount.count || 0);
+      setTotalCreations(creationsCount.count || 0);
     } catch (error) {
       console.error("Error fetching recipes:", error);
       toast({
@@ -95,7 +122,10 @@ const Recipes = () => {
   };
 
   const showFavoritesLimit =
-    subscription?.subscription_tier === "free" && favorites.length >= 10;
+    subscription?.subscription_tier === "free" && totalFavorites >= 10;
+
+  const totalFavoritesPages = Math.ceil(totalFavorites / RECIPES_PER_PAGE);
+  const totalCreationsPages = Math.ceil(totalCreations / RECIPES_PER_PAGE);
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -146,21 +176,49 @@ const Recipes = () => {
                 ))}
               </div>
             ) : favorites.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {favorites.map((recipe) => (
-                  <RecipeCard
-                    key={recipe.id}
-                    id={recipe.id}
-                    title={recipe.title}
-                    imageUrl={recipe.image_url || undefined}
-                    prepTime={recipe.prep_time_minutes}
-                    cookTime={recipe.cook_time_minutes}
-                    calories={recipe.nutritional_info?.calories}
-                    isFavorite={true}
-                    onClick={() => navigate(`/recipe/${recipe.id}`)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {favorites.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      id={recipe.id}
+                      title={recipe.title}
+                      imageUrl={recipe.image_url || undefined}
+                      prepTime={recipe.prep_time_minutes}
+                      cookTime={recipe.cook_time_minutes}
+                      calories={recipe.nutritional_info?.calories}
+                      isFavorite={true}
+                      onClick={() => navigate(`/recipe/${recipe.id}`)}
+                    />
+                  ))}
+                </div>
+
+                {totalFavoritesPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-8">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setFavoritesPage((p) => Math.max(1, p - 1))}
+                      disabled={favoritesPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    <div className="text-sm text-muted-foreground">
+                      Page {favoritesPage} sur {totalFavoritesPages}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setFavoritesPage((p) => Math.min(totalFavoritesPages, p + 1))}
+                      disabled={favoritesPage === totalFavoritesPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">
@@ -184,20 +242,48 @@ const Recipes = () => {
                 ))}
               </div>
             ) : myCreations.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {myCreations.map((recipe) => (
-                  <RecipeCard
-                    key={recipe.id}
-                    id={recipe.id}
-                    title={recipe.title}
-                    imageUrl={recipe.image_url || undefined}
-                    prepTime={recipe.prep_time_minutes}
-                    cookTime={recipe.cook_time_minutes}
-                    calories={recipe.nutritional_info?.calories}
-                    onClick={() => navigate(`/recipe/${recipe.id}`)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {myCreations.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      id={recipe.id}
+                      title={recipe.title}
+                      imageUrl={recipe.image_url || undefined}
+                      prepTime={recipe.prep_time_minutes}
+                      cookTime={recipe.cook_time_minutes}
+                      calories={recipe.nutritional_info?.calories}
+                      onClick={() => navigate(`/recipe/${recipe.id}`)}
+                    />
+                  ))}
+                </div>
+
+                {totalCreationsPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-8">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setCreationsPage((p) => Math.max(1, p - 1))}
+                      disabled={creationsPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    <div className="text-sm text-muted-foreground">
+                      Page {creationsPage} sur {totalCreationsPages}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setCreationsPage((p) => Math.min(totalCreationsPages, p + 1))}
+                      disabled={creationsPage === totalCreationsPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">

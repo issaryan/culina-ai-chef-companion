@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { RecipeCard } from "@/components/RecipeCard";
 import { TabBar } from "@/components/TabBar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,8 @@ interface Recipe {
   nutritional_info: any;
 }
 
+const RECIPES_PER_PAGE = 12;
+
 const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -31,39 +34,57 @@ const Home = () => {
   const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
   const [cuisineFilter, setCuisineFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRecipes, setTotalRecipes] = useState(0);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, difficultyFilter, cuisineFilter]);
 
   useEffect(() => {
     fetchRecipes();
-  }, [searchQuery, difficultyFilter, cuisineFilter]);
+  }, [searchQuery, difficultyFilter, cuisineFilter, currentPage]);
 
   const fetchRecipes = async () => {
     try {
       setLoading(true);
-      let query = supabase
+      let countQuery = supabase
+        .from("recipes")
+        .select("*", { count: 'exact', head: true })
+        .eq("is_public", true);
+
+      let dataQuery = supabase
         .from("recipes")
         .select("*")
         .eq("is_public", true)
         .order("created_at", { ascending: false });
 
-      // Apply search filter
       if (searchQuery) {
-        query = query.ilike("title", `%${searchQuery}%`);
+        countQuery = countQuery.ilike("title", `%${searchQuery}%`);
+        dataQuery = dataQuery.ilike("title", `%${searchQuery}%`);
       }
 
-      // Apply difficulty filter
       if (difficultyFilter !== "all") {
-        query = query.eq("difficulty", difficultyFilter);
+        countQuery = countQuery.eq("difficulty", difficultyFilter);
+        dataQuery = dataQuery.eq("difficulty", difficultyFilter);
       }
 
-      // Apply cuisine filter
       if (cuisineFilter !== "all") {
-        query = query.eq("cuisine_type", cuisineFilter);
+        countQuery = countQuery.eq("cuisine_type", cuisineFilter);
+        dataQuery = dataQuery.eq("cuisine_type", cuisineFilter);
       }
 
-      const { data, error } = await query.limit(20);
+      const from = (currentPage - 1) * RECIPES_PER_PAGE;
+      const to = from + RECIPES_PER_PAGE - 1;
+
+      const [{ count }, { data, error }] = await Promise.all([
+        countQuery,
+        dataQuery.range(from, to)
+      ]);
 
       if (error) throw error;
       setRecipes(data || []);
+      setTotalRecipes(count || 0);
     } catch (error) {
       console.error("Error fetching recipes:", error);
       toast({
@@ -76,6 +97,7 @@ const Home = () => {
     }
   };
 
+  const totalPages = Math.ceil(totalRecipes / RECIPES_PER_PAGE);
   const filteredRecipes = recipes;
 
   return (
@@ -162,6 +184,54 @@ const Home = () => {
                 ? "Aucune recette trouvée"
                 : "Aucune recette disponible"}
             </p>
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="flex items-center gap-2">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         )}
       </main>

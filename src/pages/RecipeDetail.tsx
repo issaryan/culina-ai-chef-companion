@@ -213,19 +213,27 @@ const RecipeDetail = () => {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         {isOwner && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 bg-card/80 backdrop-blur-sm"
-            onClick={handleTogglePublic}
-            disabled={isTogglingPublic}
-          >
-            {recipe.is_public ? (
-              <Globe className="h-5 w-5 text-primary" />
-            ) : (
-              <Lock className="h-5 w-5" />
-            )}
-          </Button>
+          <div className="absolute top-4 right-4 flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="bg-card/80 backdrop-blur-sm"
+              onClick={handleTogglePublic}
+              disabled={isTogglingPublic}
+            >
+              {recipe.is_public ? (
+                <>
+                  <Lock className="h-4 w-4 mr-2" />
+                  Rendre privée
+                </>
+              ) : (
+                <>
+                  <Globe className="h-4 w-4 mr-2" />
+                  Publier
+                </>
+              )}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -236,11 +244,29 @@ const RecipeDetail = () => {
             {recipe.is_public && (
               <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full flex items-center gap-1">
                 <Globe className="h-3 w-3" />
-                Public
+                Publique
               </span>
             )}
           </div>
           <p className="text-muted-foreground">{recipe.description}</p>
+          {isOwner && !recipe.is_public && (
+            <div className="mt-4 p-3 bg-muted rounded-lg flex items-start gap-3">
+              <Lock className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Recette privée</p>
+                <p className="text-xs text-muted-foreground">Seul vous pouvez voir cette recette. Publiez-la pour la partager avec la communauté.</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTogglePublic}
+                disabled={isTogglingPublic}
+              >
+                <Globe className="h-4 w-4 mr-2" />
+                Publier
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-4 text-sm">
